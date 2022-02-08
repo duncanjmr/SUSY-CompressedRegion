@@ -516,7 +516,7 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
             try:
                 outdir[var] = float(lines[i].split(": ")[1])
             except:
-                print("Couldn't get %s from: %s" % (var, lines[i]))
+                print("Couldn't get %s from: %s" % (var, lines))
                 outdir[var] = np.nan
 
         with open(working_directory + "/micromegas_out/micromegas_%i_%i.dat" % (M1, M2), "w") as f:
