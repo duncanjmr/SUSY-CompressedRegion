@@ -1,0 +1,41 @@
+# This file goes in checkmate_dir/bin folder!
+
+[Parameters]
+Analyses: atlas13tev
+
+#Name: BMH_MG_8TeV
+#SLHAFile: /home/sb/Code/CheckMate_new/checkmate2/gmu2_BP/Mug2_BMH_210907_MGparam.dat
+
+#Name: BMSM_MG_8TeV
+#SLHAFile: /home/sb/Code/CheckMate_new/checkmate2/gmu2_BP/Mug2_BMSM_211012_MGparam.dat
+
+#Name: BMSM_MG_8TeV_new
+#SLHAFile: /home/sb/Code/CheckMate_new/checkmate2/gmu2_BP/Mug2_BMSM_211014_new_MGparam.dat
+
+#Name: BMST_MG_8TeV
+#SLHAFile: /home/sb/Code/CheckMate_new/checkmate2/gmu2_BP/Mug2_BMST_210907_MGparam.dat
+
+#Name: BMW_MG_8TeV
+#SLHAFile: /home/sb/Code/CheckMate_new/checkmate2/gmu2_BP/Mug2_BMW_210907_MGparam.dat
+
+Name: CheckmateRun
+SLHAFile: /home/duncan/Software/checkmate2/bin/susyhit_MGcard.dat
+
+
+OutputExists: Overwrite
+SkipParamCheck: True
+#quiet: True
+
+[myprocess1]
+MGCommand: import model MSSM_SLHA2;
+           define ew = n2 n3 n4 x1+ x2+ x1- x2-;
+           generate p p > n2 x1+;
+	   generate p p > n2 x1-;
+MaxEvents: 500000
+
+[myprocess2]
+MGCommand: import model MSSM_SLHA2;
+           define sl- = el- mul- ta1- er- mur- ta2-;
+           define sl+ = el+ mul+ ta1+ er+ mur+ ta2+;
+           generate p p > sl- sl+;
+MaxEvents: 500000
