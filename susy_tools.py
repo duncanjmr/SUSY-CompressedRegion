@@ -408,7 +408,11 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
     
     # Set up
     filename = "spectrum_%i_%i.dat" % (M1, M2)
-    
+    Path(working_directory).mkdir(parents=True, exist_ok=True)
+    for subdir in ["spectra_slha", "prospino_cx", "checkmate", "micromegas_out"]:
+        if subdir not in os.listdir(working_directory):
+            os.mkdir(working_directory + "/" + subdir) 
+
     cwd = os.getcwd()
     
     if isinstance(remake, bool):
