@@ -11,6 +11,8 @@ import scipy.interpolate as interp
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from pathlib import Path
+from shapely.geometry import Point, Polygon, MultiPoint
+from shapely.ops import nearest_points
 
 
 import subprocess as sp
@@ -266,7 +268,6 @@ def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", step = 0.5, return
     else:
         raise Exception("to_minimize must be either \"M1\" or \"M2\"")
 
-    step = 0.5
     M = [np.array([M1_0, M2_0])]
     diffs = [get_neutralinoMassDiff(*M[0])]
 
@@ -290,26 +291,32 @@ def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", step = 0.5, return
         deriv.append((diffs[-1] - diffs[-2]) / dx)
         
         if verbose:
-            print(M[-1], diffs[-1])
+            print(M[-1], diffs[-1], deriv[-1])
         
         c += 1
     
     est = M[-1]
     
+
+    M.append(M[-1] + dM)
+    diffs.append(get_neutralinoMassDiff(*M[-1]))
     
-    if verbose:
-        print(M[-1], diffs[-1])
+    deriv2 = 4*(diffs[-1] - 2*diffs[-2] + diffs[-3]) / (M[-1][ind] - M[-3][ind])**2
     
-    if np.abs(deriv[-1]) < 0.8:
+    if verbose: print(deriv2)
+    
+    if deriv2 > 0.1 and deriv[-1] < 0.8:
         
         M.append(M[-1] + dM)
         diffs.append(get_neutralinoMassDiff(*M[-1]))
-        l3 = np.array(M).T[ind][-3:]
-
+        
+        l3 = np.array(M).T[ind][-4:]
+        if verbose:
+            print(l3, diffs[-4:])
+        
         #print(l3)
         #print(diffs[-3:])
-        p, _ = curve_fit(lambda x, a, b, c: a * (x - b)**2 + c, l3, diffs[-3:], [0.05, l3[-1], diffs[-1]])
-        #print(p)
+        p, _ = curve_fit(lambda x, a, b, c: a * (x - b)**2 + c, l3, diffs[-4:], [0.2, l3[np.argmin(diffs[-4:])], np.min(diffs[-4:])])        #print(p)
         
         est[ind] = p[1]
     
@@ -323,6 +330,7 @@ def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", step = 0.5, return
         return est
 
 def get_approxGm2(M1, M2, mu, m_sl, tanB):
+    
     alpha = 1./137
     sw_sq = 0.25
 
@@ -338,12 +346,14 @@ def get_approxGm2(M1, M2, mu, m_sl, tanB):
     
     return a_x0 + a_xp
     
-def optimize_sleptonMassesGm2(M1, M2, mu, tanB, max_m_sl=2005., N=200, verbose=False):
+def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=2005., N=200, to_minimize="sleptons", verbose=False):
 
     changeParamValue("mu(EWSB)", mu)
     changeParamValue("tanbeta(MZ)", tanB)
         
-    def get_gm2(m_sleptons):
+    def get_gm2(M1, M2, mu, m_sleptons):
+        
+        changeParamValue("mu(EWSB)", mu)
         
         changeParamValue("M_eL",   m_sleptons)
         changeParamValue("M_eR",   m_sleptons)
@@ -356,8 +366,15 @@ def optimize_sleptonMassesGm2(M1, M2, mu, tanB, max_m_sl=2005., N=200, verbose=F
         run_once(M1, M2, True, queue, working_directory="test")
         return queue.get()["gm2"]
     
-    xtest = np.logspace(np.log10(np.abs(M2)+10), np.log10(max_m_sl), N)
-    gm2_est = get_approxGm2(M1, M2, mu, xtest, tanB)
+    if to_minimize == "sleptons":
+        xtest = np.logspace(np.log10(np.abs(M2)+10), np.log10(max_test), N)
+        gm2_est = get_approxGm2(M1, M2, mu, xtest, tanB)
+        gm2_susyhit = lambda x: get_gm2(M1, M2, mu, x)
+        
+    elif to_minimize == "mu":
+        xtest = np.logspace(np.log10(np.abs(M2)+10), np.log10(max_test), N)
+        gm2_est = get_approxGm2(M1, M2, xtest, m_sleptons, tanB)
+        gm2_susyhit = lambda x: get_gm2(M1, M2, x, m_sleptons)
 
     def get_best(xtest, gm2_est):
         
@@ -378,8 +395,6 @@ def optimize_sleptonMassesGm2(M1, M2, mu, tanB, max_m_sl=2005., N=200, verbose=F
                 return xtest[cand], gm2_est[cand]
             else:
                 return np.nan, np.nan
-                
-    
     
     initial, gm2_init = get_best(xtest, gm2_est)
     
@@ -390,8 +405,8 @@ def optimize_sleptonMassesGm2(M1, M2, mu, tanB, max_m_sl=2005., N=200, verbose=F
         print("\t Closest point: (m_sleptons, delta-g) = (%i, %.2E)" % (xtest[ind], gm2_est[ind]))
         return np.nan
     
-    gm2_susyhit = get_gm2(initial)
-    correction_size = gm2_susyhit / gm2_init
+    gm2_true = gm2_susyhit(initial)
+    correction_size = gm2_true / gm2_init
     
     #print(gm2_susyhit, correction_size)
     
@@ -467,8 +482,31 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
             cx = float(l[l.rfind(" "):])    
     else:
         cx = np.nan
-                
-    if run_checkmate:
+        
+        
+    outdir = {"index": index, "M1": M1, "M2": M2}
+
+    # Calculate g-2 contribution using micromegas
+    dd_om_excluded = False
+    if run_micromegas:
+        s = os.popen(micromegas_dir + '/MSSM/get_gm2 ./' + working_directory + '/spectra_slha/' + filename).read()
+
+        lines = s.split("\n")[:-1]
+
+        for i, var in enumerate(["gm2", "omega_dm", "dd_pval"]):
+            try:
+                outdir[var] = float(lines[i].split(": ")[1])
+            except:
+                print("Couldn't get %s from: %s" % (var, lines))
+                outdir[var] = np.nan
+
+        #if outdir["dd_pval"] < 0.05 or outdir["omega_dm"] > 0.3:
+        #    dd_om_excluded = True
+           
+        with open(working_directory + "/micromegas_out/micromegas_%i_%i.dat" % (M1, M2), "w") as f:
+            f.write(s)
+                            
+    if run_checkmate and not dd_om_excluded:
         outname = "checkmate_%i_%i.dat" % (M1, M2)
         
         if outname not in os.listdir(working_directory + "/checkmate") or remake["checkmate"]:
@@ -483,6 +521,7 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
             os.chdir(cwd)
            
             os.system("cp " + checkmate_dir + "/results/" + filename.split(".")[0] + "/result.txt " + working_directory + "/checkmate/" + outname)
+            os.system("cp -r " + checkmate_dir + "/results/" + filename.split(".")[0] + "/evaluation " + working_directory + "/checkmate/" + "evaluation_%i_%i" % (M1, M2))
 
             #os.system("rm -rf ../results/" + outname)
             
@@ -496,31 +535,16 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
                     r = float(line[1])
                 if line[0] == "Analysis":
                     analysis = line[1]
-            
-                
               
     else:    
         r = np.nan
         analysis = ""
         
-    outdir = {"index": index, "M1": M1, "M2": M2, "cx": cx, "r": r, "analysis": analysis}
+        
+    outdir["cx"] = cx
+    outdir["r"] = r 
+    outdir["analysis"] = analysis
     
-    
-    # Calculate g-2 contribution using micromegas
-    if run_micromegas:
-        s = os.popen(micromegas_dir + '/MSSM/get_gm2 ./' + working_directory + '/spectra_slha/' + filename).read()
-
-        lines = s.split("\n")[:-1]
-
-        for i, var in enumerate(["gm2", "omega_dm", "dd_pval"]):
-            try:
-                outdir[var] = float(lines[i].split(": ")[1])
-            except:
-                print("Couldn't get %s from: %s" % (var, lines))
-                outdir[var] = np.nan
-
-        with open(working_directory + "/micromegas_out/micromegas_%i_%i.dat" % (M1, M2), "w") as f:
-            f.write(s)
         
     # Get particle masses from susyhit output
     with open(working_directory + "/spectra_slha/" + filename, "r") as f:
@@ -554,29 +578,30 @@ def run(points_list, remake, run_prospino=False, run_micromegas=True,
         if subdir not in os.listdir(working_directory):
             os.mkdir(working_directory + "/" + subdir)    
     
-    processors = queue.Queue()
+    processors = []
 
     out = mp.Queue()
 
     # Create processes, 3 at a time, to be run by cpus
-    procs = []
     t0 = time.time()
     c = 1
     
     print("Running %i points... " % len(points_list))
-    for i, p in enumerate(points_list):    
-        if processors.qsize() > n_procs-1:
-            proc = processors.get()
-            proc.join()
-            runtime = time.time() - t0
-            remaining = (len(points_list) - c) * runtime / c
-            if verbose:
-                print("Process %i/%i Done! \t Runtime: "
-                      "%s \t Time Remaining (est): %s \r" % (c, len(points_list), 
-                             str(datetime.timedelta(seconds=int(runtime))),
-                             str(datetime.timedelta(seconds=int(remaining)))), end="")
-            c += 1
-        
+    n_completed = 0
+    for i, p in enumerate(points_list): 
+        while len(processors) > n_procs-1:
+            for j, proc in enumerate(processors):
+                if not proc.is_alive():
+                    n_completed += 1
+                    
+                    runtime = time.time() - t0
+                    if verbose:
+                        print("Process %i/%i Done! \t Runtime: %s\r" % (c, len(points_list), 
+                                     str(datetime.timedelta(seconds=int(runtime)))), end="")
+                    processors.pop(j)
+                    c += 1
+            
+            time.sleep(0.2)
         
         proc = mp.Process(target=run_once, args=(p[0], p[1], remake, out, 
                                             run_prospino, run_micromegas,
@@ -584,21 +609,21 @@ def run(points_list, remake, run_prospino=False, run_micromegas=True,
                                             working_directory, additional_command,
                                                  i))
         proc.start()
-        processors.put(proc)
+        processors.append(proc)
         time.sleep(0.1)
 
-    while processors.qsize() > 0:
-        proc = processors.get()
-        proc.join()
-        runtime = time.time() - t0
-        remaining = (len(points_list) - c) * runtime / c
-        
-        if verbose:
-            print("Process %i/%i Done! \t Runtime: "
-                  "%s \t Time Remaining (est): %s \r" % (c, len(points_list), 
-                         str(datetime.timedelta(seconds=int(runtime))),
-                         str(datetime.timedelta(seconds=int(remaining)))), end="")
-        c += 1
+    while len(processors) > 0:
+        for j, proc in enumerate(processors):
+            if not proc.is_alive():
+                n_completed += 1
+
+                runtime = time.time() - t0
+                if verbose:
+                    print("Process %i/%i Done! \t Runtime: %s\r" % (c, len(points_list), 
+                                 str(datetime.timedelta(seconds=int(runtime)))), end="")
+                processors.pop(j)
+                c+= 1
+            time.sleep(0.2)
         
     data = {}
     ret = out.get()
@@ -617,102 +642,155 @@ def run(points_list, remake, run_prospino=False, run_micromegas=True,
         
     return data
         
-def draw_contour_old(run_points, uls, lumi=139., unit_conversion=1., cmap=None, 
-                 alpha=1, show_ul_points=False, show_pointlabels=False):
     
+############ Section of code for generating checkmate run points #################
+import scipy.optimize as op
+
+def costFunction(points, boundary, boundaryfactor = 1., widths=np.array([1.,1.]), totalcharge=1.):
+    """ 
+    A cost function which can be minimized with scipy to find the optimal point layout within 
+    a set of boundary points.
     """
-    Given a list of simulated cross section points and upper limit points, gives a sensitivity contour.
+    n = len(points)
     
-    Format of both run_points and uls is 
-    [[m_x1_0, m_x2_0, cross_section_0],
-     [m_x1_1, m_x2_1, cross_section_1],
-     ...]
-    """
+    distances = np.hstack([np.sqrt(np.sum(((points[j:] - points[:-j])/widths)**2, axis=1)) 
+                           for j in range(1, len(points))])
+    potential = totalcharge / n * np.sum(1./distances**2)
+    return potential / n
     
-    s = len(run_points) #-np.sqrt(2*sum(sel))
-    tck_pts = interp.bisplrep(run_points[:,0], run_points[:,1], 
-                          np.log(run_points[:,2]), s=s)
+def keep_insideboundary(boundary, r):
+    
+    if Polygon(boundary).contains(Point(r)):
+        return r
+    else:
+        if np.any(boundary[0] != boundary[-1]):
+            boundary = np.vstack((boundary, boundary[0]))
 
-    tck_uls = interp.bisplrep(uls[:,0], uls[:,1], 
-                          np.log(uls[:,2]), s=s)
-    
-    x = np.linspace(np.min(uls[:,0]), np.max(uls[:,0]), 20)
-    y = np.linspace(np.min(uls[:,1]), np.max(uls[:,1]), 20)
-    
-    int_pts = interp.bisplev(x, y, tck_pts)
-    int_uls = interp.bisplev(x, y, tck_uls) * np.sqrt(lumi / 139.) * unit_conversion
+        dr = boundary[1:] - boundary[:-1]
+        dr_mag = np.sqrt(np.sum(dr**2, axis=1))
+        tval = np.sum((boundary[:-1] - r) * dr, axis = 1) / dr_mag**2
 
-    if np.any(int_pts > int_uls):
-        plt.contour(y, x, int_pts - int_uls, 
-                       levels = [0, 10**20], cmap=cmap, 
-                       alpha=alpha, linewidths=2)
-        plt.contourf(y, x, int_pts - int_uls, 
-                        levels = [-10**20, 0], cmap=cmap, alpha=alpha)
-    col = cmap(0)
+        tval[tval > 1.] = 1.
+        tval[tval < 0] = 0
 
-    """
-    # Draw scatterplot with upper limit points, if requested
-    if show_ul_points:
-        plt.scatter(file[:,1], file[:,0], edgecolors=col, facecolor="none")
+        dist = np.sqrt(np.sum(( dr * tval[:,None] + boundary[:-1] - r )**2, axis=1))
+        idx = np.argmin(dist)
+        return (dr * tval[:,None] + boundary[:-1])[idx]
+    
+def optimize_points(r0, boundary, cost_function, n_steps=50, return_full=False):
+    
+    dx_mag = 0.001
+    stepsize = 0.02
+    f = lambda r: costFunction(r, boundary)
 
-        sel2 = cx_interp > ul
-        plt.scatter(file[sel2][:, 1], file[sel2][:, 0], color=col)
+    xp = [r0]
 
-    if show_pointlabels:
-        for i, l in enumerate(file):
-            if l[1] < xmax and l[0] < ymax:
-                plt.text(l[1]+xmax*0.01, l[0]+ymax*0.01, "%.2f" % ul[i], 
-                         color=col, fontsize=11)
-    """
+    cost = [f(r0)]
+    minfound=False
+    for step in range(n_steps):
+        if minfound: 
+            continue
+            
+        dc_dxi_0 = []
+        for i in range(len(xp[-1])):
+            dc_dxi_0.append([])
+            for j in range(2):
 
-def draw_contour(run_points, uls, lumi=139., unit_conversion=1., cmap=None, 
-                 alpha=1, show_ul_points=False, show_pointlabels=False):
-    
-    """
-    Given a list of simulated cross section points and upper limit points, gives a sensitivity contour.
-    
-    Format of both run_points and uls is 
-    [[m_x1_0, m_x2_0, cross_section_0],
-     [m_x1_1, m_x2_1, cross_section_1],
-     ...]
-    """
-    
-    s = len(run_points) #-np.sqrt(2*sum(sel))
-    k = int(np.floor(np.sqrt(s)) - 1)
-    if k > 3:
-        k=3
-    print(s,k)
-    
-    tck_pts = interp.bisplrep(run_points[:,0], run_points[:,1], 
-                          np.log(run_points[:,2]))
-    
-    int_pts = []
-    for l in uls:
-        c = interp.bisplev(l[0], l[1], tck_pts)
-        if c > 10: c=10
-        int_pts.append( np.exp(c) )
+                dx = np.zeros(xp[0].shape)
+                dx[i, j] = dx_mag*stepsize
+                dc_dxi_0[i].append( (f(xp[-1] + dx) - f(xp[-1]))/(dx_mag*stepsize))
 
-    int_pts = np.array(int_pts)
-    ul_adj =  uls[:,2] * np.sqrt(lumi / 139.) * unit_conversion
+        grad = np.array(dc_dxi_0)
         
-    if np.any(int_pts > ul_adj):
-        plt.tricontour(uls[:,1], uls[:,0], int_pts - ul_adj, 
-                       levels = [0, 10**20], cmap=cmap, 
-                       alpha=alpha)
-        plt.tricontourf(uls[:,1], uls[:,0], int_pts - ul_adj, 
-                        levels = [0, 10**20], cmap=cmap, alpha=alpha)
-    col = cmap(0)
-    
-    
-    # Draw scatterplot with upper limit points, if requested
-    if show_ul_points:
-        plt.scatter(uls[:,1], uls[:,0], edgecolors=col, facecolor="none")
+        mags = np.sum(grad, axis=1)
+        toobig = stepsize*mags > 0.05
+        grad[toobig] = grad[toobig] / mags[toobig][:,None] * 0.05
+        proposed = np.array([keep_insideboundary(boundary, r) for r in xp[-1] - stepsize * grad])
+        
+        co = f(proposed)
+        
+        if not minfound:
+            xp.append(proposed)
+            cost.append(f(xp[-1]))   
+                
+    if return_full:
+        return xp
+    else:
+        return xp[-1]
 
-        sel = int_pts > ul_adj
-        plt.scatter(uls[sel][:, 1], uls[sel][:,0], color=col)
-
-    if show_pointlabels:
-        for i, l in enumerate(uls):
-            plt.text(l[1], l[0], "%.1f\n%.1f" % (ul_adj[i], int_pts[i]),
-                                                     color=col, fontsize=8)
     
+def get_allowed_polygon(x, y, om, dd):
+    """
+    Generates the boundary points given the omega_dm and direct detection constraints.
+    """
+    com = plt.tricontourf(x,y,om, levels=[0.3, 1e10], alpha=0);
+    om_bounds = [col.get_paths()[0].vertices.T for col in com.collections][0]
+    
+    cdm = plt.tricontourf(x,y,dd, levels=[-1,0.05], alpha=0);
+    dd_bounds = [col.get_paths()[0].vertices.T for col in cdm.collections][0]
+
+    mp = MultiPoint(np.array([x, y]).T)
+    p_space = mp.buffer(1).buffer(-1)
+
+    if len(dd_bounds.T) > 2:
+        dd_pol = Polygon(dd_bounds.T)
+        p_space = p_space.difference(dd_pol)
+    if len(om_bounds.T) > 2:
+        om_pol = Polygon(om_bounds.T)
+        p_space = p_space.difference(om_pol)
+    
+    scan_region = p_space.buffer(-0.01).buffer(0.01)
+    
+    boundary_points = [scan_region.boundary.interpolate(a, normalized=True) for a in np.linspace(0, 1, 100)]
+    boundary_coords = np.array([[b.x, b.y] for b in boundary_points])
+    return boundary_coords
+
+def generate_grid(number, boundary):
+    """
+    Generates a grid of N points within the boundary. Generally a good initial guess for minimization.
+    """
+    xmax, ymax = np.max(boundary, axis=0)*0.99
+    xmin, ymin = np.min(boundary, axis=0)*1.01
+
+    wx = xmax - xmin
+    wy = ymax - ymin
+
+    density = number / (wx * wy)
+    area = Polygon(boundary).area
+
+    Np = number * number/(area*density)
+    N_axis = int(np.ceil(np.sqrt(Np)*1.2))
+
+    n_inside = 10000
+    
+    while n_inside > number:
+        g0 = np.meshgrid(np.linspace(xmin, xmax, N_axis), np.linspace(ymin, ymax, N_axis))
+        p0 = np.vstack((g0[0].flatten(), g0[1].flatten()))
+
+        n_inside = np.sum([Polygon(boundary).contains(Point(p)) for p in p0.T])
+        xmax *= 1.005
+        ymax *= 1.005
+
+    p_out = []
+    for p in p0.T:
+        if Polygon(boundary).contains(Point(p)):
+            p_out.append(p)
+
+    return np.array(p_out)
+
+def get_checkmatePoints(x, y, om, dd, N, totalcharge=1., return_full=False, n_steps=50):
+    
+    wx = np.max(x) - np.min(x)
+    wy = np.max(y) - np.min(y)
+    boundary = get_allowed_polygon(x/wx, y/wy, om, dd)
+
+    plt.close()
+
+    grid_points = generate_grid(N, boundary)
+    widths = np.max(boundary, axis=0) - np.min(boundary, axis=0)
+    scan_points = optimize_points(grid_points, boundary, costFunction, n_steps=n_steps, 
+                                  return_full=return_full)
+
+    return np.array(scan_points)*np.array([wx,wy]), boundary* np.array([wx, wy])
+
+
