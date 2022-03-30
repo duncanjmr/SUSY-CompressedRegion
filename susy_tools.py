@@ -19,7 +19,7 @@ import subprocess as sp
 from subprocess import DEVNULL, STDOUT, check_call
 
 
-scripts_dir = "/home/duncan/UChicago/SUSY/compressed"
+scripts_dir = "/home/duncan/UChicago/SUSY-CompressedRegion"
 checkmate_dir = "/home/duncan/Software/checkmate2"
 susyhit_dir = "/home/duncan/UChicago/SUSY/new_susyhit"
 micromegas_dir = "/home/duncan/UChicago/SUSY/micromegas"
@@ -346,7 +346,7 @@ def get_approxGm2(M1, M2, mu, m_sl, tanB):
     
     return a_x0 + a_xp
     
-def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=2005., N=200, to_minimize="sleptons", verbose=False):
+def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=3005., N=300, to_minimize="sleptons", verbose=False):
 
     changeParamValue("mu(EWSB)", mu)
     changeParamValue("tanbeta(MZ)", tanB)
@@ -364,7 +364,7 @@ def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=2005., N=200, to_minimiz
         
         queue = mp.Queue()
         run_once(M1, M2, True, queue, working_directory="test")
-        return queue.get()["gm2"]
+        return queue.get()["gm2"]  
     
     if to_minimize == "sleptons":
         xtest = np.logspace(np.log10(np.abs(M2)+10), np.log10(max_test), N)
@@ -372,7 +372,7 @@ def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=2005., N=200, to_minimiz
         gm2_susyhit = lambda x: get_gm2(M1, M2, mu, x)
         
     elif to_minimize == "mu":
-        xtest = np.logspace(np.log10(np.abs(M2)+10), np.log10(max_test), N)
+        xtest = np.logspace(np.log10(100), np.log10(max_test), N)
         gm2_est = get_approxGm2(M1, M2, xtest, m_sleptons, tanB)
         gm2_susyhit = lambda x: get_gm2(M1, M2, x, m_sleptons)
 
@@ -383,10 +383,12 @@ def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=2005., N=200, to_minimiz
 
         candidates = []
         for i in range(0, len(xtest)-1):
-            if np.sign(score[i]) != np.sign(score[i+1]):
+            if np.sign(score[i]) != np.sign(score[i+1]) and np.abs(score[i]) < 0.5 and np.abs(score[i+1]) < 0.5:
                 candidates.append(np.interp(0, [score[i+1], score[i]], [xtest[i+1], xtest[i]]))
 
         if len(candidates) > 0:
+            if len(candidates) > 1:
+                print("Multiple gm2 candidates found: %s" % (str(candidates)))
             return np.max(candidates), 2.74e-9
         
         else:
@@ -408,9 +410,20 @@ def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=2005., N=200, to_minimiz
     gm2_true = gm2_susyhit(initial)
     correction_size = gm2_true / gm2_init
     
-    #print(gm2_susyhit, correction_size)
+    final, gm2_corr = get_best(xtest, correction_size * gm2_est)
     
-    return get_best(xtest, correction_size * gm2_est)[0]
+    gm2_final = gm2_susyhit(final)
+    
+    if verbose:
+        print("Tested %s range: \t%i - %i" % (to_minimize, min(xtest), max(xtest)))
+        print("Tree level gm2 range: \t%.2E - %.2E" % (min(gm2_est), max(gm2_est)))
+        print("Loop Correction Size: \t%.2f" % ((correction_size - 1) * 100) + "%")
+        print("Initial %s, gm2 values: \t%i , %.2E" % (to_minimize, initial, gm2_true))
+        print("Final %s, gm2 values: \t%i , %.2E" % (to_minimize, final, gm2_final))
+
+    
+    return final
+        
     
 
 
@@ -457,7 +470,6 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
             out_queue.put(out)
             return None
               
-    
         
     # Generate Prospino cross sections
     if run_prospino:
@@ -499,9 +511,6 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
             except:
                 print("Couldn't get %s from: %s" % (var, lines))
                 outdir[var] = np.nan
-
-        #if outdir["dd_pval"] < 0.05 or outdir["omega_dm"] > 0.3:
-        #    dd_om_excluded = True
            
         with open(working_directory + "/micromegas_out/micromegas_%i_%i.dat" % (M1, M2), "w") as f:
             f.write(s)
@@ -558,7 +567,7 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
 
 def run(points_list, remake, run_prospino=False, run_micromegas=True, 
         run_checkmate=False,
-        working_directory=None, verbose=True, additional_command=None, n_procs=3):
+        working_directory=None, verbose=True, additional_command=None, n_procs=6):
     
     """
     Over a list of [[M1, M2], [M1, M2], ...], runs susy programs and gives the output as a queue.

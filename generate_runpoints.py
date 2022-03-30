@@ -12,17 +12,19 @@ import json
 
 ########################## Input Parameters ##########################
 tanB = 50
-m_sleptons = 500
+m_sleptons = 540
 N = (9, 12)
 min_diff = 1.
 max_diff = 70.
 min_M2 = 120
 max_M2 = 350
-sign_M1 = -1.
+sign_M1 = 1.
 
-N_checkmate = 12
+N_checkmate = 21
 to_optimize_gm2 = True
 
+om_cm_bound_factor = 0.
+dd_cm_bound_factor = 1.e10
 show_plot = True
 
 ######################### Initial Setup ##################################
@@ -79,6 +81,7 @@ for i, M2 in enumerate(M2_init):
     if to_optimize_gm2:
         m = optimize_gm2(sign_M1*M2, M2, M2+1, tanB, m_sleptons, to_minimize="mu")
         if np.isnan(m):
+            print("\t NaN \t NaN")
             continue
         mu.append(m)
         changeParamValue("mu(EWSB)", m)
@@ -170,8 +173,8 @@ x = np.array(data["M2"])
 y = np.abs(data["~chi_20"]) - np.abs(data["~chi_10"])
 
 sel = ~np.isnan(y) * ~np.isnan(x)
-checkmate_points, boundary = get_checkmatePoints(x[sel], np.log(y[sel]), 0.5*np.array(om)[sel], 
-                                                 2*np.array(dd)[sel], N=N_checkmate)
+checkmate_points, boundary = get_checkmatePoints(x[sel], np.log(y[sel]), om_cm_bound_factor*np.array(om)[sel], 
+                                                 dd_cm_bound_factor*(np.array(dd)[sel]+1e-5), N=N_checkmate)
 
 boundary[:,1] = np.exp(boundary[:,1])
 checkmate_points[:,1] = np.exp(checkmate_points[:,1])
@@ -201,11 +204,26 @@ dictionary ={
 cm_file = "%s/checkmate_points.json" % direc
 with open(cm_file, "w") as outfile:
     json.dump(dictionary, outfile)
-
+    
 print("Generation Complete. Saved to json named %s" % cm_file)
 print()
 
-######################## Plot points and show ###########################3
+########### Run susyhit/micromegas for initial checkmate points #########
+
+
+print("Running susyhit/micromegas for checkmate points")
+
+def additional_command(M1, M2, index):
+    changeParamValue("mu(EWSB)", mu_cm[index])
+
+data = run(np.vstack(points), True, run_prospino=False, 
+               run_micromegas=True,
+               run_checkmate=False,
+               working_directory="./%s/checkmate" % (direc),
+               additional_command=additional_command)
+
+print()
+######################## Plot points and show ###########################
 
 f = plt.figure(figsize=(10, 5))
 ax = f.add_subplot(1, 2, 1)

@@ -23,7 +23,7 @@ with open("%s/scan_points.json" % direc, "r") as f:
     scan_data = json.load(f)
 
 show_plot = True
-smooth_checkmate = True
+smooth_checkmate = False
 
 tanB = cm_data["tanB"]
 m_sleptons = cm_data["m_sleptons"]
