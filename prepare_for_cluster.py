@@ -16,7 +16,7 @@ reference = {"index": [], "directory": [], "filename": []}
 for d in direc:
     for s in os.listdir("%s/checkmate/spectra_slha" % d):
         reference["index"].append(i)
-        reference["directory"].append("%scheckmate" % d)
+        reference["directory"].append("%s/checkmate" % d)
         reference["filename"].append(s)
         i += 1
         

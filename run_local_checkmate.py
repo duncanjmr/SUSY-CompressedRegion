@@ -5,6 +5,7 @@ import datetime
 import time
 
 filename = "cluster_index_reference.txt"
+verbose = True
 
 if filename not in os.listdir("./"):
     raise NameError("List of checkmate points not found. Run prepare_for_cluster.py")
@@ -27,8 +28,6 @@ for i in range(N):
     while len(processors) > n_procs-1:
         for j, proc in enumerate(processors):
             if not proc.is_alive():
-                n_completed += 1
-
                 runtime = time.time() - t0
                 if verbose:
                     print("Process %i/%i Done! \t Runtime: %s\r" % (c, N, 
@@ -46,8 +45,6 @@ for i in range(N):
 while len(processors) > 0:
     for j, proc in enumerate(processors):
         if not proc.is_alive():
-            n_completed += 1
-
             runtime = time.time() - t0
             if verbose:
                 print("Process %i/%i Done! \t Runtime: %s\r" % (c, N, 

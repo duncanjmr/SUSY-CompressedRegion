@@ -3,7 +3,7 @@ import numpy as np
 import json
 import argparse
 
-remove_checkmate = False
+remove_checkmate = True
 
 # Parse filename arg
 parser = argparse.ArgumentParser()
@@ -35,6 +35,6 @@ if outfile not in os.listdir("%s/checkmate" % direc):
     os.system("cp ../results/spectrum_%i/result.txt %s/%s/checkmate/%s" % (i, cwd, direc, outfile))
 
     if remove_checkmate:
-        os.system("rm -rf ../result/%s" % slhafile)
+        os.system("rm -rf ../result/spectrum_%i" % i)
 
     os.chdir(cwd)
