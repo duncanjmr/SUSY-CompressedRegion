@@ -17,7 +17,7 @@ direc = args["scan_dir"]
 
 print("Plotting Checkmate results in %s" % direc)
 
-if "checkmate_complete.json" not in os.listdir("."):
+if "checkmate_complete.json" not in os.listdir(direc):
     with open("%s/checkmate_points.json" % direc, "r") as f:
         data = json.load(f)
 
@@ -55,7 +55,7 @@ with open("%s/scan_points.json" % direc, "r") as f:
     scan_data = json.load(f)
 
 show_plot = True
-smooth_checkmate = False
+smooth_checkmate = True
 
 tanB = cm_data["tanB"]
 m_sleptons = cm_data["m_sleptons"]
