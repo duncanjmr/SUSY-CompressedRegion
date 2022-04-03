@@ -1,0 +1,5 @@
+Test: Calculation of r = signal/(95%CL limit on signal)
+Result: Excluded
+Result for r: 1.18293314895
+Analysis: atlas_conf_2019_040
+SR: MB-SSd-2-1000-22

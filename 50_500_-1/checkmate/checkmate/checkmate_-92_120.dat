@@ -1,0 +1,6 @@
+Test: Calculation of r = signal/(95%CL limit on signal)
+Warning: There is a chance the signal could be excluded with about 1.5 times more MC events!
+Result: Allowed
+Result for r: 0.832385051728
+Analysis: atlas_2004_10894
+SR: Cat12

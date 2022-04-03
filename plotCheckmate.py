@@ -6,6 +6,7 @@ import json
 from matplotlib.patches import Patch
 from PIL import Image
 import argparse
+import os
 
 
 # Parse filename arg
@@ -15,6 +16,37 @@ args = vars(parser.parse_args())
 direc = args["scan_dir"]
 
 print("Plotting Checkmate results in %s" % direc)
+
+if "checkmate_complete.json" not in os.listdir("."):
+    with open("%s/checkmate_points.json" % direc, "r") as f:
+        data = json.load(f)
+
+    ## Edit susy-hit input to generate spectra
+    changeParamValue("tanbeta(MZ)", data["tanB"])
+
+    changeParamValue("M_eL",   data["m_sleptons"])
+    changeParamValue("M_eR",   data["m_sleptons"])
+    changeParamValue("M_muL",  data["m_sleptons"])
+    changeParamValue("M_muR",  data["m_sleptons"])
+    changeParamValue("M_tauL", data["m_sleptons"])
+    changeParamValue("M_tauR", data["m_sleptons"])
+
+    def additional_command(M1, M2, index):
+        changeParamValue("mu(EWSB)", data["mu"][index])
+    
+    # Run susyhit and micromegas
+    cmdata = run(data["points"], False, run_prospino=False, 
+                   run_micromegas=True,
+                   run_checkmate=True,
+                   working_directory="./%s/checkmate" % direc,
+                   additional_command=additional_command)
+
+    for k in ["tanB", "m_sleptons", "sign_M1", "mu"]:
+        cmdata[k] = data[k]
+
+    cm_file =  "%s/checkmate_complete.json" % (direc)
+    with open(cm_file, "w") as outfile:
+        json.dump(cmdata, outfile)
 
 with open("%s/checkmate_complete.json" % direc, "r") as f:
     cm_data = json.load(f)
