@@ -388,8 +388,9 @@ def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=3005., N=300, to_minimiz
 
         if len(candidates) > 0:
             if len(candidates) > 1:
-                print("Multiple gm2 candidates found: %s" % (str(candidates)))
-            return np.max(candidates), 2.74e-9
+                #print("Multiple gm2 candidates found: %s" % (str(candidates)))
+                pass
+            return np.min(candidates), 2.74e-9
         
         else:
             cand = np.argmin(np.abs(score))

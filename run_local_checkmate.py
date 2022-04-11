@@ -22,7 +22,7 @@ processors = []
 
 print("Running %i points... " % N)
 n_procs = 6
-c = 0
+c = 1
 t0 = time.time()
 for i in range(N): 
     while len(processors) > n_procs-1:

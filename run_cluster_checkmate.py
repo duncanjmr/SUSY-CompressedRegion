@@ -33,8 +33,10 @@ if outfile not in os.listdir("%s/checkmate" % direc):
     os.system("python runCheckmate.py spectrum_%i.dat >> %s/checkmate_logs/checkmate_%i.log" % (i, cwd, i))
     fileinfo = slhafile.split(".")[0].split("_")
     os.system("cp ../results/spectrum_%i/result.txt %s/%s/checkmate/%s" % (i, cwd, direc, outfile))
+    os.system("cp -r ../results/spectrum_%i/evaluation %s/%s/checkmate/evaluation_%s" % (i, cwd, direc, outfile))
 
     if remove_checkmate:
         os.system("rm -rf ../result/spectrum_%i" % i)
 
+    os.system("rm spectrum_%i.dat" % i)
     os.chdir(cwd)

@@ -12,13 +12,13 @@ import json
 
 ########################## Input Parameters ##########################
 tanB = 50
-m_sleptons = 500
+m_sleptons = 450
 N = (9, 12)
 min_diff = 1.
 max_diff = 70.
 min_M2 = 120
 max_M2 = 350
-sign_M1 = -1.
+sign_M1 = 1.
 
 N_checkmate = 21
 to_optimize_gm2 = True
