@@ -1,0 +1,34 @@
+[Parameters]
+Analyses: atlas13tev
+
+#Name: BMH_MG_8TeV
+#SLHAFile: /home/sb/Code/CheckMate_new/checkmate2/gmu2_BP/Mug2_BMH_210907_MGparam.dat
+
+#Name: BMSM_MG_8TeV
+#SLHAFile: /home/sb/Code/CheckMate_new/checkmate2/gmu2_BP/Mug2_BMSM_211012_MGparam.dat
+
+#Name: BMSM_MG_8TeV_new
+#SLHAFile: /home/sb/Code/CheckMate_new/checkmate2/gmu2_BP/Mug2_BMSM_211014_new_MGparam.dat
+
+#Name: BMST_MG_8TeV
+#SLHAFile: /home/sb/Code/CheckMate_new/checkmate2/gmu2_BP/Mug2_BMST_210907_MGparam.dat
+
+#Name: BMW_MG_8TeV
+#SLHAFile: /home/sb/Code/CheckMate_new/checkmate2/gmu2_BP/Mug2_BMW_210907_MGparam.dat
+
+Name: CheckmateRun
+#SLHAFile: /home/duncan/Software/checkmate2/bin/susyhit_slha.out
+
+
+OutputExists: Overwrite
+SkipParamCheck: True
+#quiet: True
+
+[myprocess1]
+Pythia8Card: pythia_card_pos.in
+
+[myprocess2]
+Pythia8Card: pythia_card_neg.in
+
+[myprocess2]
+Pythia8Card: pythia_card_sleptons.in

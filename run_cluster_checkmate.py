@@ -3,6 +3,7 @@ import numpy as np
 import json
 import argparse
 
+use_pythia = True
 remove_checkmate = True
 
 # Parse filename arg
@@ -30,7 +31,11 @@ if outfile not in os.listdir("%s/checkmate" % direc):
 
     os.system("cp %s/spectra_slha/%s %s/bin/spectrum_%i.dat" % (direc, slhafile, checkmate_dir, i))
     os.chdir("%s/bin" % checkmate_dir)
-    os.system("python runCheckmate.py spectrum_%i.dat >> %s/checkmate_logs/checkmate_%i.log" % (i, cwd, i))
+    
+    if use_pythia:
+    	os.system("python runPythiaCheckmate.py spectrum_%i.dat >> %s/checkmate_logs/checkmate_%i.log" % (i, cwd, i))
+    else:
+        os.system("python runCheckmate.py spectrum_%i.dat >> %s/checkmate_logs/checkmate_%i.log" % (i, cwd, i))
     fileinfo = slhafile.split(".")[0].split("_")
     os.system("cp ../results/spectrum_%i/result.txt %s/%s/checkmate/%s" % (i, cwd, direc, outfile))
     os.system("cp -r ../results/spectrum_%i/evaluation %s/%s/checkmate/evaluation_%s" % (i, cwd, direc, outfile))
