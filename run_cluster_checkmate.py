@@ -3,7 +3,7 @@ import numpy as np
 import json
 import argparse
 
-use_pythia = True
+use_pythia = False
 remove_checkmate = True
 
 # Parse filename arg

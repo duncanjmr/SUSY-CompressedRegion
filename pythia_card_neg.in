@@ -33,8 +33,8 @@ SLHA:file = susyhit_slha.out
 SUSY:qqbar2chi+-chi0 = on
 
 ! Optionally select only specific sparticle codes in the final state
-SUSY:idA        = 0 !2000001           ! 0: all
-SUSY:idB        = 0 !2000001           ! 0: all
-SUSY:idVecA = {1000023}
-SUSY:idVecB = {-1000024}
+SUSY:idA        = 1000023 !2000001           ! 0: all
+SUSY:idB        = -1000023 !2000001           ! 0: all
+#SUSY:idVecA = {1000023}
+#SUSY:idVecB = {-1000024}
 

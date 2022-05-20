@@ -11,16 +11,16 @@ from scipy.interpolate import interp2d
 import json
 
 ########################## Input Parameters ##########################
-tanB = 50
-m_sleptons = 450
-N = (9, 12)
-min_diff = 1.
+tanB = 40
+m_sleptons = 400
+N = (9,12)
+min_diff = 1
 max_diff = 70.
-min_M2 = 120
+min_M2 = 100
 max_M2 = 350
-sign_M1 = 1.
+sign_M1 = -1.
 
-N_checkmate = 21
+N_checkmate = 40
 to_optimize_gm2 = True
 
 om_cm_bound_factor = 0.
@@ -46,14 +46,14 @@ changeParamValue("M_eL",   m_sleptons)
 changeParamValue("M_eR",   m_sleptons)
 changeParamValue("M_muL",  m_sleptons)
 changeParamValue("M_muR",  m_sleptons)
-changeParamValue("M_tauL", m_sleptons)
-changeParamValue("M_tauR", m_sleptons)
+changeParamValue("M_tauL", 2.5e3)
+changeParamValue("M_tauR", 2.5e3)
 
 direc = "%i_%i_%i" % (tanB, m_sleptons, sign_M1)
 if direc not in os.listdir("./"):
     os.mkdir(direc)
     
-M2_init = np.logspace(np.log10(min_M2), np.log10(max_M2), N[0])
+M2_init = np.linspace(min_M2, max_M2, N[0])
 
 print("Results will be saved in ./%s" % direc)
     
@@ -69,7 +69,7 @@ M1_max = []
 diffs = []
 
 print("Calculating minima of delta(x1,x2), and fixing mu with g-2, for each M2: \n")
-print(" M2 \t  M1 \t mu")
+print(" M2 \t  mu \t M1_min\t delta m(x1,x2)")
 print("------------------------")
 
 for i, M2 in enumerate(M2_init):
@@ -92,14 +92,18 @@ for i, M2 in enumerate(M2_init):
         mu.append(M2)
         M2_l.append(M2)
     
+    print("\t %i" % m, end="")
     # Now find the mass splitting minimum.
-    M_min, diff = minimize_neutralinoMassDiff(sign_M1*M2, M2, "M1", step=0.5, return_diff=True,verbose=False)
+    M_min, diff = minimize_neutralinoMassDiff(sign_M1*M2, M2, "M1", return_diff=True,verbose=False)
     M1_m = M_min[0]
-    M1_m -= 0.1 * np.sign(M1_m)
+    #M1_m -= 0.1 * np.sign(M1_m)
     
     M1_max.append(M1_m)
     diffs.append(diff)
-    print("\t %i \t %i" % (M1_m, m))
+    if diff > 0.5:
+        print("\t %i \t %.1f" % (M1_m,  diff))
+    else:
+        print("\t %i \t %.1E" % (M1_m,  diff))
     
 # This generates a y-axis sequence of points to scan
 print()
@@ -107,16 +111,17 @@ mu_l = []
 M1_max = np.abs(M1_max) - min_diff
 
 # Use fewer points if the mass splitting minimum is large
-start = (np.array(diffs) + min_diff) / max_diff
-N_adj = np.round(N[1] * np.sqrt(np.log10(start) / np.log10(np.min(start))), 0 )
-    
+width = np.log(max_diff) - np.log(diffs)
+N_adj = np.array(np.ceil(width*N[1]/np.max(width)), dtype=int)
+
 points_l = []
 for i in range(len(M1_max)):
     # Generate points along the y axis, even in logspace
     points = []
-    for dm in (np.logspace(np.log10(start[i]), 0, int(N_adj[i])) - start[i] + 1./max_diff)/(1-start[i]):
-        points.append([M1_max[i]* (1-dm*max_diff/M1_max[i]), M2_l[i]])
-
+        
+    for logdm in np.linspace(np.log(np.max([min_diff, diffs[i]])), np.log(max_diff), N_adj[i]):
+        points.append([M1_max[i] + diffs[i] - np.exp(logdm), M2_l[i]])
+        
     if sign_M1 < 0:
         points = [[-p[0], p[1]] for p in points]
     points_l.append(points)  
@@ -132,7 +137,7 @@ data = run(np.vstack(points_l), True, run_prospino=False,
                working_directory="./%s/scan" % (direc),
                additional_command=additional_command)
         
-    
+
 data["tanB"] = tanB
 data["m_sleptons"] = m_sleptons
 data["sign_M1"] = sign_M1
@@ -140,7 +145,6 @@ data["mu"] = mu_l
 
 with open("%s/scan_points.json" % direc, "w") as outfile:
     json.dump(data, outfile)
-
     
 ###############
 

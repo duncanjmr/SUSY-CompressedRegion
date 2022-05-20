@@ -30,5 +30,5 @@ Pythia8Card: pythia_card_pos.in
 [myprocess2]
 Pythia8Card: pythia_card_neg.in
 
-[myprocess2]
+[myprocess3]
 Pythia8Card: pythia_card_sleptons.in

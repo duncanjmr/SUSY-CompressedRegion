@@ -329,6 +329,40 @@ def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", step = 0.5, return
     else:
         return est
 
+    
+def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", return_diff=False, verbose=False, n_procs=6):
+
+    # def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", step = 0.5, return_diff=False, verbose=False):
+
+    n_pts = n_procs
+    
+    points0 = np.array([-1*(M2_0 + np.array([-30, -29, 49, 50])), M2_0*np.ones(4)]).T
+    data0 = run(points0, remake=True, working_directory="minimization_spectra", verbose=False)
+    y = np.abs(data0["~chi_20"]) - np.abs(data0["~chi_10"])
+    x = np.abs(data0["M1"])
+    
+    est0 = x[0] - y[0] / (y[1]-y[0]) / (x[1]-x[0])
+    est1 = x[2] - y[2] / (y[3]-y[2]) / (x[3]-x[2])
+
+    est = (est0 + est1)/2
+
+    points = np.array([np.sign(M1_0)*np.linspace(est+5, est-5, n_pts), M2_0*np.ones(n_pts)]).T
+    
+    data = run(points, remake=True, working_directory="minimization_spectra", verbose=False)
+
+    mdl_ch1 = lambda x, *p: p[0] + p[1]*(x-p[3]) - np.sqrt(p[2]**2 + (p[1]*(x-p[3]))**2)
+    mdl_ch2 = lambda x, *p: p[0] + p[1]*(x-p[3]) + np.sqrt(p[2]**2 + (p[1]*(x-p[3]))**2)
+
+    p0 = [M2_0, 1, 1, est]
+    p1, cov1 = curve_fit(mdl_ch1, np.abs(data["M1"]), np.abs(data["~chi_10"]), p0)
+    p2, cov2 = curve_fit(mdl_ch2, np.abs(data["M1"]), np.abs(data["~chi_20"]), p0)
+    
+    #print(p1, p2)
+    if return_diff:
+        return [np.sign(M1_0)*np.average([p1[3], p2[3]]), M2_0], np.abs(p1[2]) + np.abs(p2[2])
+    else:
+        return [np.sign(M1_0)*np.average([p1[3], p2[3]]), M2_0]
+    
 def get_approxGm2(M1, M2, mu, m_sl, tanB):
     
     alpha = 1./137
@@ -340,7 +374,6 @@ def get_approxGm2(M1, M2, mu, m_sl, tanB):
     fx0 = lambda x: (x**2 - 1 - 2*x*np.log(x)) / (1-x)**3
     df_dx = lambda x : x/(1-x)**3 * (2*x - 2*(1 + np.log(x)) + 3 * (1-x)**2 * fx0(x))
 
-    
     a_x0 = -alpha * M1 * m_mu**2 * mu * tanB / (4*np.pi*(1-sw_sq)*m_sl**4) * (fx0((M1/m_sl)**2) + df_dx((M1/m_sl)**2))
     a_xp = alpha*m_mu**2 * mu * M2 * tanB / (4*np.pi*sw_sq*m_sl**2) * (fxp((M2/m_sl)**2) - fxp((mu/m_sl)**2)) / (M2**2 - mu**2)
     
@@ -359,8 +392,8 @@ def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=3005., N=300, to_minimiz
         changeParamValue("M_eR",   m_sleptons)
         changeParamValue("M_muL",  m_sleptons)
         changeParamValue("M_muR",  m_sleptons)
-        changeParamValue("M_tauL", m_sleptons)
-        changeParamValue("M_tauR", m_sleptons)
+        #changeParamValue("M_tauL", m_sleptons)
+        #changeParamValue("M_tauR", m_sleptons)
         
         queue = mp.Queue()
         run_once(M1, M2, True, queue, working_directory="test")
@@ -372,7 +405,7 @@ def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=3005., N=300, to_minimiz
         gm2_susyhit = lambda x: get_gm2(M1, M2, mu, x)
         
     elif to_minimize == "mu":
-        xtest = np.logspace(np.log10(100), np.log10(max_test), N)
+        xtest = np.logspace(np.log10(99.), np.log10(max_test), N)
         gm2_est = get_approxGm2(M1, M2, xtest, m_sleptons, tanB)
         gm2_susyhit = lambda x: get_gm2(M1, M2, x, m_sleptons)
 
@@ -471,6 +504,11 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
             out_queue.put(out)
             return None
               
+        else:
+            # Get particle masses from susyhit output
+            outdir = {"index": index, "M1": M1, "M2": M2}
+            for label in masses_to_save:
+                outdir[label] = getParamValue(s, label)
         
     # Generate Prospino cross sections
     if run_prospino:
@@ -496,9 +534,6 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
     else:
         cx = np.nan
         
-        
-    outdir = {"index": index, "M1": M1, "M2": M2}
-
     # Calculate g-2 contribution using micromegas
     dd_om_excluded = False
     if run_micromegas:
@@ -554,13 +589,7 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
     outdir["cx"] = cx
     outdir["r"] = r 
     outdir["analysis"] = analysis
-    
-        
-    # Get particle masses from susyhit output
-    with open(working_directory + "/spectra_slha/" + filename, "r") as f:
-        s = f.read()
-        for label in masses_to_save:
-            outdir[label] = getParamValue(s, label)
+
             
     out_queue.put(outdir)
     return None
@@ -596,7 +625,8 @@ def run(points_list, remake, run_prospino=False, run_micromegas=True,
     t0 = time.time()
     c = 1
     
-    print("Running %i points... " % len(points_list))
+    if verbose:
+        print("Running %i points... " % len(points_list))
     n_completed = 0
     for i, p in enumerate(points_list): 
         while len(processors) > n_procs-1:
