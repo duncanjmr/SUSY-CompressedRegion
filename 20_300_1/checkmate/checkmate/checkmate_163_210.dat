@@ -1,0 +1,5 @@
+Test: Calculation of r = signal/(95%CL limit on signal)
+Result: Excluded
+Result for r: 1.06678278805
+Analysis: atlas_1911_12606
+SR: S-inc-40

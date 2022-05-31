@@ -2,8 +2,10 @@ from susy_tools import *
 import numpy as np
 import json
 import argparse
+import time
 
-use_pythia = False
+t0 = time.time()
+use_pythia = True
 remove_checkmate = True
 
 # Parse filename arg
@@ -45,3 +47,6 @@ if outfile not in os.listdir("%s/checkmate" % direc):
 
     os.system("rm spectrum_%i.dat" % i)
     os.chdir(cwd)
+
+tf = time.time()
+print('Run time: %s' % (tf-t0))

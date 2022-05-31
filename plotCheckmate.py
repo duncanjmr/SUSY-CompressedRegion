@@ -54,8 +54,8 @@ with open("%s/checkmate_complete.json" % direc, "r") as f:
 with open("%s/scan_points.json" % direc, "r") as f:
     scan_data = json.load(f)
 
-show_plot = True
-smooth_checkmate = True
+show_plot = False
+smooth_checkmate = False
 
 tanB = cm_data["tanB"]
 m_sleptons = cm_data["m_sleptons"]
@@ -202,7 +202,7 @@ max_br = np.max(np.array(br_rat[:-1])[~np.isnan(br_rat[:-1])])
 for i in range(len(br_rat)):
 
     ax = f.add_subplot(2, 4, i+1)
-    
+    print (names[i])
     br = np.array(br_rat[i])
     select = ~np.isnan(br)
     br_nonan = br[select]
@@ -217,7 +217,10 @@ for i in range(len(br_rat)):
     
     N_levels = 7
     
-    mx = max(br_nonan)
+    if len(br_nonan) > 0:
+        mx = max(br_nonan)
+    else:
+        mx = 1.
     if np.all(br_nonan == 0):
         mn = 0
     else:

@@ -18,11 +18,10 @@ from shapely.ops import nearest_points
 import subprocess as sp
 from subprocess import DEVNULL, STDOUT, check_call
 
-
-scripts_dir = "/home/duncan/UChicago/SUSY-CompressedRegion"
-checkmate_dir = "/home/duncan/Software/checkmate2"
-susyhit_dir = "/home/duncan/UChicago/SUSY/new_susyhit"
-micromegas_dir = "/home/duncan/UChicago/SUSY/micromegas"
+scripts_dir = "/work1/ewpht/tongou/mssm/SUSY-CompressedRegion"
+checkmate_dir = "/work1/ewpht/tongou/mssm/checkmate2"
+susyhit_dir = "/work1/ewpht/tongou/mssm/susyhit"
+micromegas_dir = "/work1/ewpht/tongou/mssm/micromegas_5.2.13"
 
 def changeParamValue(label, value):
     """
@@ -330,7 +329,7 @@ def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", step = 0.5, return
         return est
 
     
-def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", return_diff=False, verbose=False, n_procs=6):
+def _minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", return_diff=False, verbose=False, n_procs=6):
 
     # def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", step = 0.5, return_diff=False, verbose=False):
 
@@ -560,7 +559,7 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
                       " " + checkmate_dir + "/bin/")
             
             os.chdir(checkmate_dir + "/bin")
-            os.system("python runCheckmate.py " + filename)
+            os.system("python runPythiaCheckmate.py " + filename)
             
             os.system("rm " + filename)
             os.chdir(cwd)

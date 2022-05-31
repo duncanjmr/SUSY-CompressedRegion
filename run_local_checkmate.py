@@ -21,7 +21,12 @@ def run_checkmate(i):
 processors = []
 
 print("Running %i points... " % N)
-n_procs = 6
+try:
+    n_procs = int(os.environ["SLURM_JOB_CPUS_PER_NODE"])
+except KeyError:
+    n_procs = mp.cpu_count()
+print("Running jobs on %s processors" % n_procs)
+#n_procs = 6
 c = 1
 t0 = time.time()
 for i in range(N): 

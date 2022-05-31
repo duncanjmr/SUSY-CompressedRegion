@@ -1,0 +1,5 @@
+Test: Calculation of r = signal/(95%CL limit on signal)
+Result: Allowed
+Result for r: 0.693193881046
+Analysis: atlas_1712_08119
+SR: SRI-MLL-10
