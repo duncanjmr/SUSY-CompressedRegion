@@ -55,7 +55,6 @@ with open("%s/scan_points.json" % direc, "r") as f:
     scan_data = json.load(f)
 
 show_plot = True
-smooth_checkmate = False
 
 tanB = cm_data["tanB"]
 m_sleptons = cm_data["m_sleptons"]
@@ -141,6 +140,8 @@ om = np.array(scan_data["omega_dm"])
 dd = np.array(scan_data["dd_pval"])
 
 cm_x = np.array(cm_data["M2"])
+cm_x = np.abs(cm_data["~chi_20"])
+
 cm_y = np.abs(cm_data["~chi_20"]) - np.abs(cm_data["~chi_10"])
 
 cm_x0 = cm_x
@@ -154,26 +155,16 @@ m_x2 = np.array(m_x2)
 
 y = np.abs(m_x2) - np.abs(m_x1)
 x = np.array(scan_data["M2"])
+x = np.abs(m_x2)
 
 sel = ~np.isnan(y) * ~np.isnan(x)
 
 x = x[sel]
 y = y[sel]
 
-if smooth_checkmate:
-    print("Smoothing checkmate points for more reasonable contours...")
+x_scale = (np.max(x) - np.min(x)) / (np.max(np.log(y)) - np.min(np.log(y)))
+print(x_scale)
 
-    #print(np.vstack((cm_x, cm_y, cm_r)).T)
-    interp_points, _ = get_checkmatePoints(cm_x, np.log(cm_y), np.zeros(len(cm_x)), np.ones(len(cm_y)), 50)
-    interp_points[:, 1] = np.exp(interp_points[:, 1])
-    
-    tck = interp.bisplrep(cm_x, cm_y, np.log(cm_r), kx=2, ky=2, s=1)
-    cm_r = np.array([np.exp(interp.bisplev(*p, tck)) for p in interp_points])
-    cm_x, cm_y = interp_points.T
-    
-    #print(np.vstack((cm_x, cm_y, cm_r)).T)
-    
-print("Done.")
 levels = np.linspace(0, 1.001, 100)
 
 f = plt.figure(figsize=(24, 13))
@@ -209,10 +200,10 @@ for i in range(len(br_rat)):
     br_nonan = br[select]
     
     if i == len(br_rat)-1:
-        xsel = cm_x[select]/350
+        xsel = cm_x[select]/x_scale
         ysel = np.log(cm_y[select])
     else:
-        xsel = x[select*sel]/350
+        xsel = x[select*sel]/x_scale
         ysel = np.log(y[select*sel])
     
     
@@ -247,6 +238,7 @@ for i in range(len(br_rat)):
     ax.set_yticks([])
     ax.set_xticks([])
     
+    
     ax.grid(1)
     
     
@@ -257,15 +249,15 @@ for i in range(len(br_rat)):
 
     if np.any(~np.isnan(cm_r)):
         s2 = ~np.isnan(cm_r)
-        ax.tricontour(cm_x[s2]/350, np.log(cm_y[s2]), cm_r[s2],levels=[1,1e2], cmap="autumn", linestyles="dashed")
-        ax.tricontourf(cm_x[s2]/350, np.log(cm_y[s2]), cm_r[s2],levels=[1,1e2], cmap="autumn", alpha=0.3)
+        ax.tricontour(cm_x[s2]/x_scale, np.log(cm_y[s2]), cm_r[s2],levels=[1,1e2], cmap="autumn", linestyles="dashed")
+        ax.tricontourf(cm_x[s2]/x_scale, np.log(cm_y[s2]), cm_r[s2],levels=[1,1e2], cmap="autumn", alpha=0.3)
     
     if show_omega:
         
         s2 = ~np.isnan(om)[sel]
-        ax.tricontourf(x[s2]/350, np.log(y[s2]), np.log(np.array(om)[sel][s2]), levels=np.log([0.07, 0.3]), cmap="Purples", alpha=0.8)
-        cs = ax.tricontour(x[s2]/350, np.log(y[s2]), np.array(om)[sel][s2], levels=[0.07, 0.3], cmap="Purples", alpha=0)
-        dd_cont = plt.tricontourf(x/350, np.log(y), np.array(dd)[sel], levels = [0, 0.05], cmap="Greys",alpha=0.7)
+        ax.tricontourf(x[s2]/x_scale, np.log(y[s2]), np.log(np.array(om)[sel][s2]), levels=np.log([0.07, 0.3]), cmap="Purples", alpha=0.8)
+        cs = ax.tricontour(x[s2]/x_scale, np.log(y[s2]), np.array(om)[sel][s2], levels=[0.07, 0.3], cmap="Purples", alpha=0)
+        dd_cont = ax.tricontourf(x/x_scale, np.log(y), np.log(dd+1e-5)[sel], levels = [-100, np.log(0.05)], cmap="Greys",alpha=0.7)
         
     
     if i == 1:
@@ -295,18 +287,19 @@ for i in range(len(br_rat)):
     if i == len(br_rat)-1:
         plt.title("Checkmate r-value")
         accepted = cm_r0 < 1.
-        cm_sc = ax.scatter(cm_x0[accepted]/350, np.log(cm_y0[accepted]), marker="o", color="green")
-        cm_sc = ax.scatter(cm_x0[~accepted]/350, np.log(cm_y0[~accepted]), marker="o", color="red")
-        scan_sc =  ax.scatter(x/350, np.log(y), marker="x", alpha=0.8)
+        cm_sc = ax.scatter(cm_x0[accepted]/x_scale, np.log(cm_y0[accepted]), marker="o", color="green")
+        cm_sc = ax.scatter(cm_x0[~accepted]/x_scale, np.log(cm_y0[~accepted]), marker="o", color="red")
+        scan_sc =  ax.scatter(x/x_scale, np.log(y), marker="x", alpha=0.8)
         plt.legend([cm_sc, scan_sc], ["Checkmate Points", "Initial Scan points"])
         
         
+    ax.set_ylim(ax.get_ylim()[0], min(ax.get_ylim()[1], np.log(92)))
 
 
     ax3.set_yscale("log")
 
     ax3.set_ylim(*np.exp(ax.get_ylim()))
-    ax3.set_xlim(*(np.array(ax.get_xlim())*350))
+    ax3.set_xlim(*(np.array(ax.get_xlim())*x_scale))
 
     ax3.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
     ax3.get_yaxis().set_minor_formatter(matplotlib.ticker.ScalarFormatter())
