@@ -55,7 +55,7 @@ with open("%s/scan_points.json" % direc, "r") as f:
     scan_data = json.load(f)
 
 show_plot = True
-smooth_checkmate = True
+smooth_checkmate = False
 
 tanB = cm_data["tanB"]
 m_sleptons = cm_data["m_sleptons"]
@@ -129,7 +129,6 @@ for i in range(len(scan_data["M2"])):
                     np.nan_to_num(getBranchingRatio(s, "BR(~chi_1+ -> ~chi_10 c    sb)")))
     h_m.append(getParamValue(s, "h"))
 
-
     frac_bino.append(getParamValue(s, "N_11"))
     frac_wino.append(getParamValue(s, "N_12"))
 
@@ -201,18 +200,20 @@ levels_l = [np.linspace(0,1, n_levels+1),
 max_br = np.max(np.array(br_rat[:-1])[~np.isnan(br_rat[:-1])])
 for i in range(len(br_rat)):
 
+    print(i)
+
     ax = f.add_subplot(2, 4, i+1)
     
     br = np.array(br_rat[i])
     select = ~np.isnan(br)
     br_nonan = br[select]
-
-    if i == 6:
-        xsel = cm_x[select]
-        ysel = cm_y[select]
+    
+    if i == len(br_rat)-1:
+        xsel = cm_x[select]/350
+        ysel = np.log(cm_y[select])
     else:
-        xsel = x[select*sel]
-        ysel = y[select*sel]
+        xsel = x[select*sel]/350
+        ysel = np.log(y[select*sel])
     
     
     N_levels = 7
@@ -221,7 +222,7 @@ for i in range(len(br_rat)):
     if np.all(br_nonan == 0):
         mn = 0
     else:
-        mn = 0.01*min(br_nonan[br_nonan != 0])
+        mn = min(br_nonan[br_nonan != 0])
             
     #levels = (1.015*mx - (mx-mn) * np.logspace(-2, 0, N_levels))[::-1]
     levels = levels_l[i]
@@ -243,33 +244,28 @@ for i in range(len(br_rat)):
     #lim = ax.tricontour(x, y, np.abs(np.vstack(points_new)[sel].T[0]) - np.abs(np.vstack(points_l)[sel].T[1]), 
     #                    levels= [-M2, 0], cmap=cmap)
 
-    ax.set_xlabel(r"M2 ($\mu$ fixed to g-2) [GeV]", fontsize=12)
-    ax.set_title(r"BR$(\chi_2^0\  \to $ %s)" % names[i], fontsize=16)
-    ax.set_yscale("log")
-    #ax.set_xscale("log")
-
-    ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    ax.get_yaxis().set_minor_formatter(matplotlib.ticker.ScalarFormatter())
-    #ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    #ax.get_xaxis().set_minor_formatter(matplotlib.ticker.ScalarFormatter())
-
-    ax.tick_params(axis="x", which="both", rotation=45)
-    #for tick in ax.get_xticklabels():
-    #    tick.set_rotation(45)
+    ax.set_yticks([])
+    ax.set_xticks([])
     
     ax.grid(1)
     
+    
+    ax3 = f.add_subplot(2,4,i+1)
+    ax3.patch.set_alpha(0)
+    ax3.set_xlabel(r"M2 ($\mu$ fixed to g-2) [GeV]", fontsize=12)
+    ax3.set_title(r"BR$(\chi_2^0\  \to $ %s)" % names[i], fontsize=16)
+
     if np.any(~np.isnan(cm_r)):
         s2 = ~np.isnan(cm_r)
-        plt.tricontour(cm_x[s2], cm_y[s2], cm_r[s2],levels=[1,1e2], cmap="autumn", linestyles="dashed")
-        plt.tricontourf(cm_x[s2], cm_y[s2], cm_r[s2],levels=[1,1e2], cmap="autumn", alpha=0.3)
+        ax.tricontour(cm_x[s2]/350, np.log(cm_y[s2]), cm_r[s2],levels=[1,1e2], cmap="autumn", linestyles="dashed")
+        ax.tricontourf(cm_x[s2]/350, np.log(cm_y[s2]), cm_r[s2],levels=[1,1e2], cmap="autumn", alpha=0.3)
     
     if show_omega:
         
         s2 = ~np.isnan(om)[sel]
-        ax.tricontourf(x[s2], y[s2], np.array(om)[sel][s2], levels=[0.07, 0.3], cmap="Purples", alpha=0.8)
-        cs = ax.tricontour(x[s2], y[s2], np.array(om)[sel][s2], levels=[0.07, 0.3], cmap="Purples", alpha=0)
-        dd_cont = plt.tricontourf(x, y, np.array(dd)[sel], levels = [0, 0.05], cmap="Greys",alpha=0.7)
+        ax.tricontourf(x[s2]/350, np.log(y[s2]), np.log(np.array(om)[sel][s2]), levels=np.log([0.07, 0.3]), cmap="Purples", alpha=0.8)
+        cs = ax.tricontour(x[s2]/350, np.log(y[s2]), np.array(om)[sel][s2], levels=[0.07, 0.3], cmap="Purples", alpha=0)
+        dd_cont = plt.tricontourf(x/350, np.log(y), np.array(dd)[sel], levels = [0, 0.05], cmap="Greys",alpha=0.7)
         
     
     if i == 1:
@@ -284,27 +280,40 @@ for i in range(len(br_rat)):
     if i == 0:
         pass
 
-        ax.set_ylabel(r"$\Delta(\chi_1^0, \chi_2^0)$ [GeV]", fontsize=12)
+        ax3.set_ylabel(r"$\Delta(\chi_1^0, \chi_2^0)$ [GeV]", fontsize=12)
 
         sign = "\nM1<0"
-        plt.text(np.max(x)*0.75, ax.get_ylim()[1]*0.4, 
+        plt.text(0.05, 0.95, 
                  "tanB: %i\nm_sl: %i GeV"% (tanB, m_sleptons) + sign*int(sign_M1 < 0), 
+                 transform=ax.transAxes, verticalalignment="top",
                  fontsize=14, bbox=dict(facecolor='white', edgecolor='black',))
-        
-        #blueline = ax.plot([],[], color="blue", alpha=0.4)[0]
-        #ax.legend([blueline], ["M1 = M2"], loc=2, fontsize=15)
         
     if i == 5:
         plt.title(r"BR($\chi_1^{\pm} \to x_1^0 + \overline{q} + q$)", fontsize=16)
     
 
-    if i == 6:
+    if i == len(br_rat)-1:
         plt.title("Checkmate r-value")
         accepted = cm_r0 < 1.
-        cm_sc = plt.scatter(cm_x0[accepted], cm_y0[accepted], marker="o", color="green")
-        cm_sc = plt.scatter(cm_x0[~accepted], cm_y0[~accepted], marker="o", color="red")
-        scan_sc =  plt.scatter(x, y, marker="x", alpha=0.8)
+        cm_sc = ax.scatter(cm_x0[accepted]/350, np.log(cm_y0[accepted]), marker="o", color="green")
+        cm_sc = ax.scatter(cm_x0[~accepted]/350, np.log(cm_y0[~accepted]), marker="o", color="red")
+        scan_sc =  ax.scatter(x/350, np.log(y), marker="x", alpha=0.8)
         plt.legend([cm_sc, scan_sc], ["Checkmate Points", "Initial Scan points"])
+        
+        
+
+
+    ax3.set_yscale("log")
+
+    ax3.set_ylim(*np.exp(ax.get_ylim()))
+    ax3.set_xlim(*(np.array(ax.get_xlim())*350))
+
+    ax3.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax3.get_yaxis().set_minor_formatter(matplotlib.ticker.ScalarFormatter())
+    
+    #ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    #ax.get_xaxis().set_minor_formatter(matplotlib.ticker.ScalarFormatter())
+    #ax3.xaxis.set_minor_locator(MultipleLocator(10))
 
 
 #plt.plot(*get_allowed_polygon(x, y, om, dd).T)
@@ -314,12 +323,9 @@ i += 1
 order = np.argsort(scan_data["M2"])
 ax = f.add_subplot(2, 4, i+1)
 ax.plot(np.array(scan_data["M2"])[order], np.array(scan_data["mu"])[order])
-ax.set_xscale("log")
 ax.set_title("M2 vs. mu", fontsize=15)
 ax.set_xlabel("M2 [GeV]", fontsize=12)
 ax.set_ylabel("mu [GeV]", fontsize=12)
-ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-ax.get_xaxis().set_minor_formatter(matplotlib.ticker.ScalarFormatter())
 ax.grid(True, which="both")
 
     
