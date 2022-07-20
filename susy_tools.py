@@ -330,13 +330,13 @@ def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", step = 0.5, return
         return est
 
     
-def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", return_diff=False, verbose=False, n_procs=6):
+def _minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", return_diff=False, verbose=False, n_procs=6):
 
     # def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", step = 0.5, return_diff=False, verbose=False):
 
     n_pts = n_procs
     
-    points0 = np.array([-1*(M2_0 + np.array([-30, -29, 49, 50])), M2_0*np.ones(4)]).T
+    points0 = np.array([np.sign(M1_0)*(M2_0 + np.array([-30, -29, 49, 50])), M2_0*np.ones(4)]).T
     data0 = run(points0, remake=True, working_directory="minimization_spectra", verbose=False)
     y = np.abs(data0["~chi_20"]) - np.abs(data0["~chi_10"])
     x = np.abs(data0["M1"])
@@ -362,6 +362,52 @@ def minimize_neutralinoMassDiff(M1_0, M2_0, to_minimize="M1", return_diff=False,
         return [np.sign(M1_0)*np.average([p1[3], p2[3]]), M2_0], np.abs(p1[2]) + np.abs(p2[2])
     else:
         return [np.sign(M1_0)*np.average([p1[3], p2[3]]), M2_0]
+
+def optimize_relicDensity(M1_0, M2, mu, m_sleptons, tanB, verbose=False, tolerance=0.01, maxiter=10, save_dd_pval=False):
+
+    changeParamValue("mu(EWSB)", mu)
+    changeParamValue("tanbeta(MZ)", tanB)
+    changeParamValue("M_eL",   m_sleptons)
+    changeParamValue("M_eR",   m_sleptons)
+    changeParamValue("M_muL",  m_sleptons)
+    changeParamValue("M_muR",  m_sleptons)
+    
+    def dOm_dM1(M1, M2, stepsize=0.1):
+        dic = run([[M1, M2],[M1+np.sign(M1)*stepsize, M2]], True, 
+                  working_directory="test", dd_pval=save_dd_pval, label_by="rand", verbose=False)
+
+        om = dic["omega_dm"]
+        deriv = np.sign(M1) * (om[1] - om[0]) / stepsize
+
+        return om[0], deriv, dic
+    
+    target = 0.11
+    max_stepsize = 10
+
+    p0 = [M1_0, M2]
+    p = [p0]
+
+    om, deriv, dic = dOm_dM1(*p[-1])
+
+    c = 0
+    while np.abs(om - target) > tolerance and c < maxiter:
+        dM1 = (0.11 - om) / deriv
+
+        delta = max_stepsize * np.tanh(dM1/max_stepsize)
+
+        p.append([p[-1][0] + delta, p[-1][1]])
+
+        om, deriv, dic = dOm_dM1(*p[-1])
+        c += 1
+    
+    if c == maxiter:
+        print("Minimum possibly not found: Omega = %.3e, returning NaN" % om)
+        p[-1][0] = np.nan
+    
+    for k in dic.keys():
+        dic[k] = [dic[k][1]]
+    
+    return p[-1][0], dic
     
 def get_approxGm2(M1, M2, mu, m_sl, tanB):
     
@@ -369,20 +415,44 @@ def get_approxGm2(M1, M2, mu, m_sl, tanB):
     sw_sq = 0.25
 
     m_mu = 0.1
+        
+    def fxp(x):
+        z0 = np.zeros(len(x))
+        sel = np.abs(x-1) > 0.01
+        z0[sel] = (x[sel]**2 - 4*x[sel] + 3 + 2*np.log(x[sel])) / (1-x[sel])**3
+        z0[~sel] = - 2./3 + 0.5*(x[~sel]-1)
+        return z0
+     
+    def fx0(x):
+        z0 = np.zeros(len(x))
+        sel = np.abs(x-1) > 0.01
+        z0[sel] = (x[sel]**2 - 1 - 2*x[sel]*np.log(x[sel])) / (1-x[sel])**3
+        z0[~sel] = - 1./3 + 1./6*(x[~sel]-1)
+        return z0
+
+    def df_dx(x):
+        z0 = np.zeros(len(x))
+        sel = np.abs(x-1) > 0.01
+        z0[sel] = x[sel]/(1-x[sel])**3 * (2*x[sel] - 2*(1 + np.log(x[sel])) + 3 * (1-x[sel])**2 * fx0(x[sel]))
+        z0[~sel] = 1./6
+        return z0
     
-    fxp = lambda x: (x**2 - 4*x + 3 + 2*np.log(x)) / (1-x)**3
-    fx0 = lambda x: (x**2 - 1 - 2*x*np.log(x)) / (1-x)**3
-    df_dx = lambda x : x/(1-x)**3 * (2*x - 2*(1 + np.log(x)) + 3 * (1-x)**2 * fx0(x))
+    if not isinstance(m_sl, np.ndarray):
+        m_sl=np.array([m_sl])
 
     a_x0 = -alpha * M1 * m_mu**2 * mu * tanB / (4*np.pi*(1-sw_sq)*m_sl**4) * (fx0((M1/m_sl)**2) + df_dx((M1/m_sl)**2))
     a_xp = alpha*m_mu**2 * mu * M2 * tanB / (4*np.pi*sw_sq*m_sl**2) * (fxp((M2/m_sl)**2) - fxp((mu/m_sl)**2)) / (M2**2 - mu**2)
     
     return a_x0 + a_xp
     
-def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=3005., N=300, to_minimize="sleptons", verbose=False):
+def optimize_gm2(M1, M2, mu, tanB, m_sleptons, test_range=None, N=300, to_minimize="mu", 
+                 verbose=False, target=2.7e-9, tolerance=1, which="low"):
 
     changeParamValue("mu(EWSB)", mu)
-    changeParamValue("tanbeta(MZ)", tanB)
+    changeParamValue("tanbeta(MZ)", tanB)        
+        
+    if test_range == None:
+        test_range = [M2+1, 3005.]
         
     def get_gm2(M1, M2, mu, m_sleptons):
         
@@ -392,52 +462,59 @@ def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=3005., N=300, to_minimiz
         changeParamValue("M_eR",   m_sleptons)
         changeParamValue("M_muL",  m_sleptons)
         changeParamValue("M_muR",  m_sleptons)
-        #changeParamValue("M_tauL", m_sleptons)
-        #changeParamValue("M_tauR", m_sleptons)
+        changeParamValue("M_tauL", 2.5e3)
+        changeParamValue("M_tauR", 2.5e3)
         
         queue = mp.Queue()
-        run_once(M1, M2, True, queue, working_directory="test")
+        run_once(M1, M2, True, queue, working_directory="test", dd_pval=False)
         return queue.get()["gm2"]  
     
     if to_minimize == "sleptons":
-        xtest = np.logspace(np.log10(np.abs(M2)+10), np.log10(max_test), N)
+        xtest = np.logspace(*np.log10(test_range), N)
         gm2_est = get_approxGm2(M1, M2, mu, xtest, tanB)
         gm2_susyhit = lambda x: get_gm2(M1, M2, mu, x)
         
     elif to_minimize == "mu":
-        xtest = np.logspace(np.log10(99.), np.log10(max_test), N)
+        xtest = np.logspace(*np.log10(test_range), N)
         gm2_est = get_approxGm2(M1, M2, xtest, m_sleptons, tanB)
         gm2_susyhit = lambda x: get_gm2(M1, M2, x, m_sleptons)
 
     def get_best(xtest, gm2_est):
         
-        #best = np.argmin(np.abs(gm2_est*1e9-2.74))
-        score = (gm2_est*1e9-2.74)
+        score = (gm2_est-target)*1e9
 
         candidates = []
         for i in range(0, len(xtest)-1):
-            if np.sign(score[i]) != np.sign(score[i+1]) and np.abs(score[i]) < 0.5 and np.abs(score[i+1]) < 0.5:
-                candidates.append(np.interp(0, [score[i+1], score[i]], [xtest[i+1], xtest[i]]))
+            if not np.isnan(score[i]) and not np.isnan(score[i+1]):
+                if np.sign(score[i]) != np.sign(score[i+1]):
+                    direc = int(np.sign(score[i+1]))
+                    candidates.append(np.interp(0, score[i:i+2][::direc], xtest[i:i+2][::direc]))
 
         if len(candidates) > 0:
             if len(candidates) > 1:
-                #print("Multiple gm2 candidates found: %s" % (str(candidates)))
+                print("Multiple gm2 candidates found: %s" % (str(candidates)))
                 pass
-            return np.min(candidates), 2.74e-9
+            if which=="low":
+                return np.min(candidates), target
+            elif which=="high":
+                return np.max(candidates), target
+            else:
+                raise NameError("Which must be \"high\" or \"low\"")
         
         else:
             cand = np.argmin(np.abs(score))
-            if np.abs(score[cand]) < 0.73:
+            if np.abs(score[cand]) < 0.73*tolerance:
                 return xtest[cand], gm2_est[cand]
             else:
                 return np.nan, np.nan
     
     initial, gm2_init = get_best(xtest, gm2_est)
-    
+        
+      
     if np.isnan(initial): 
         print("Warning: Unable to satisfy g-2 with these parameters: (M1, M2, mu, tanB) = (%i, %i, %i, %i)" % (M1, M2, mu, tanB))
         
-        ind = np.argmin(np.abs(gm2_est*1e9-2.74))
+        ind = np.argmin(np.abs(gm2_est-target)*1e9)
         print("\t Closest point: (m_sleptons, delta-g) = (%i, %.2E)" % (xtest[ind], gm2_est[ind]))
         return np.nan
     
@@ -463,13 +540,26 @@ def optimize_gm2(M1, M2, mu, tanB, m_sleptons, max_test=3005., N=300, to_minimiz
 
 def run_once(M1, M2, remake, out_queue, run_prospino=False, 
              run_micromegas=True, run_checkmate=False, working_directory=".", 
-             additional_command=None, index=None, masses_to_save=["~chi_10", "~chi_20"]):
+             additional_command=None, index=0, label_by=None, dd_pval=True):
     """
     Runs susyhit, micromegas, checkmate, and/or prospino once. Each program can be toggled.
     """
     
+    masses_to_save = ["~chi_10", "~chi_20"]
+    
+    tag = "%i_%i" % (M1, M2)
+    #if label_by == "full":
+    #    for k in additional_settings.keys():
+    #        #tag += "_%i" % additional_settings[k]
+    
+    if label_by == "rand":
+        tag = str(time.time()).split(".")[1]
+        
+    elif label_by == "ordered":
+        tag = str(index).zfill(6)
+    
     # Set up
-    filename = "spectrum_%i_%i.dat" % (M1, M2)
+    filename = "spectrum_%s.dat" % tag
     Path(working_directory).mkdir(parents=True, exist_ok=True)
     for subdir in ["spectra_slha", "prospino_cx", "checkmate", "micromegas_out"]:
         if subdir not in os.listdir(working_directory):
@@ -512,7 +602,7 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
         
     # Generate Prospino cross sections
     if run_prospino:
-        outname = "cx_%i_%i.dat" % (M1, M2)
+        outname = "cx_%s.dat" % tag
         if outname not in os.listdir(working_directory + "/prospino_cx") or remake["prospino"]:
             os.chdir("../prospino")
             os.system("cp " + scripts_dir + "/" + working_directory + "/spectra_slha/" + filename + 
@@ -537,22 +627,34 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
     # Calculate g-2 contribution using micromegas
     dd_om_excluded = False
     if run_micromegas:
-        s = os.popen(micromegas_dir + '/MSSM/get_gm2 ./' + working_directory + '/spectra_slha/' + filename).read()
-
+        entries = ["gm2", "omega_dm"]
+        labels = ["g-2 contribution", "Omega_DM"]
+        
+        if dd_pval:
+            s = os.popen(micromegas_dir + '/MSSM/get_gm2 ./' + working_directory + '/spectra_slha/' + filename).read()
+            entries.append("dd_pval")
+            labels.append("Exclusion p-value")
+        else:
+            s = os.popen(micromegas_dir + '/MSSM/get_gm2_omega ./' + working_directory + '/spectra_slha/' + filename).read()
+        
         lines = s.split("\n")[:-1]
 
-        for i, var in enumerate(["gm2", "omega_dm", "dd_pval"]):
-            try:
-                outdir[var] = float(lines[i].split(": ")[1])
-            except:
-                print("Couldn't get %s from: %s" % (var, lines))
-                outdir[var] = np.nan
+        for l in lines:
+            isIn = [lab in l for lab in labels]
+            if sum(isIn) > 0:
+                idx = np.argmax(isIn)
+                outdir[entries[idx]] = float(l.split(": ")[1])
+            
+        for e in entries:
+            if e not in outdir.keys():
+                print("Couldn't get %s from: %s" % (e, lines))
+                outdir[e] = np.nan
            
         with open(working_directory + "/micromegas_out/micromegas_%i_%i.dat" % (M1, M2), "w") as f:
             f.write(s)
                             
     if run_checkmate and not dd_om_excluded:
-        outname = "checkmate_%i_%i.dat" % (M1, M2)
+        outname = "checkmate_%s.dat" % tag
         
         if outname not in os.listdir(working_directory + "/checkmate") or remake["checkmate"]:
             os.system("cp " + working_directory + 
@@ -566,7 +668,7 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
             os.chdir(cwd)
            
             os.system("cp " + checkmate_dir + "/results/" + filename.split(".")[0] + "/result.txt " + working_directory + "/checkmate/" + outname)
-            os.system("cp -r " + checkmate_dir + "/results/" + filename.split(".")[0] + "/evaluation " + working_directory + "/checkmate/" + "evaluation_%i_%i" % (M1, M2))
+            os.system("cp -r " + checkmate_dir + "/results/" + filename.split(".")[0] + "/evaluation " + working_directory + "/checkmate/" + "evaluation_%s" % tag)
 
             #os.system("rm -rf ../results/" + outname)
             
@@ -584,8 +686,8 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
     else:    
         r = np.nan
         analysis = ""
-        
-        
+    
+    outdir["tag"] = tag    
     outdir["cx"] = cx
     outdir["r"] = r 
     outdir["analysis"] = analysis
@@ -597,7 +699,8 @@ def run_once(M1, M2, remake, out_queue, run_prospino=False,
 
 def run(points_list, remake, run_prospino=False, run_micromegas=True, 
         run_checkmate=False,
-        working_directory=None, verbose=True, additional_command=None, n_procs=6):
+        working_directory=None, verbose=True, additional_command=None, n_procs=6,
+        label_by=None, dd_pval=True):
     
     """
     Over a list of [[M1, M2], [M1, M2], ...], runs susy programs and gives the output as a queue.
@@ -647,7 +750,7 @@ def run(points_list, remake, run_prospino=False, run_micromegas=True,
                                             run_prospino, run_micromegas,
                                             run_checkmate,
                                             working_directory, additional_command,
-                                                 i))
+                                                 i, label_by, dd_pval))
         proc.start()
         processors.append(proc)
         time.sleep(0.1)
@@ -695,6 +798,7 @@ def costFunction(points, boundary, boundaryfactor = 1., widths=np.array([1.,1.])
     
     distances = np.hstack([np.sqrt(np.sum(((points[j:] - points[:-j])/widths)**2, axis=1)) 
                            for j in range(1, len(points))])
+    
     potential = totalcharge / n * np.sum(1./distances**2)
     return potential / n
     
@@ -763,7 +867,7 @@ def get_allowed_polygon(x, y, om, dd):
     """
     Generates the boundary points given the omega_dm and direct detection constraints.
     """
-    com = plt.tricontourf(x,y,om, levels=[0.3, 1e10], alpha=0);
+    com = plt.tricontourf(x,y,om, levels=[0.1, 1e10], alpha=0);
     om_bounds = [col.get_paths()[0].vertices.T for col in com.collections][0]
     
     cdm = plt.tricontourf(x,y,dd, levels=[-1,0.05], alpha=0);
