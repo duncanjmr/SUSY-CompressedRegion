@@ -371,6 +371,8 @@ def optimize_relicDensity(M1_0, M2, mu, m_sleptons, tanB, verbose=False, toleran
     changeParamValue("M_eR",   m_sleptons)
     changeParamValue("M_muL",  m_sleptons)
     changeParamValue("M_muR",  m_sleptons)
+    changeParamValue("M_tauL",  m_sleptons)
+    changeParamValue("M_tauR",  m_sleptons)
     
     def dOm_dM1(M1, M2, stepsize=0.1):
         dic = run([[M1, M2],[M1+np.sign(M1)*stepsize, M2]], True, 
@@ -462,8 +464,10 @@ def optimize_gm2(M1, M2, mu, tanB, m_sleptons, test_range=None, N=300, to_minimi
         changeParamValue("M_eR",   m_sleptons)
         changeParamValue("M_muL",  m_sleptons)
         changeParamValue("M_muR",  m_sleptons)
-        changeParamValue("M_tauL", 2.5e3)
-        changeParamValue("M_tauR", 2.5e3)
+        changeParamValue("M_tauL", m_sleptons)
+        changeParamValue("M_tauR", m_sleptons)
+        #changeParamValue("M_tauL", 2.5e3)
+        #changeParamValue("M_tauR", 2.5e3)
         
         queue = mp.Queue()
         run_once(M1, M2, True, queue, working_directory="test", dd_pval=False)

@@ -4,7 +4,7 @@ import os
 import json
 from susy_tools import *
 
-save_for_cluster = True
+save_for_cluster = False
 
 tanB = 50
 m_sleptons = 500
@@ -12,11 +12,10 @@ sign_M1 = -1
 
 save_directory = "cluster_muM2scan_%i_%i_%i" % (tanB, m_sleptons, sign_M1)
 
+N=(12,10)
 
-N=(2,2)
-
-M2_l = np.linspace(150, m_sleptons, N[0])
-max_mu = 0.3e4
+M2_l = np.linspace(120, m_sleptons-10, N[0])
+max_mu = 1.5e3
 
 min_mu = M2_l[0] - 10
 

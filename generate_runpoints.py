@@ -11,14 +11,14 @@ from scipy.interpolate import interp2d
 import json
 
 ########################## Input Parameters ##########################
-tanB = 40
+tanB = 30
 m_sleptons = 400
 N = (9,12)
 min_diff = 1
 max_diff = 70.
 min_M2 = 100
 max_M2 = 350
-sign_M1 = -1.
+sign_M1 = 1.
 
 N_checkmate = 40
 to_optimize_gm2 = True
@@ -79,7 +79,7 @@ for i, M2 in enumerate(M2_init):
         
     # Set mu with g-2 optimization, if requested
     if to_optimize_gm2:
-        m = optimize_gm2(sign_M1*M2, M2, M2+1, tanB, m_sleptons, to_minimize="mu")
+        m = optimize_gm2(sign_M1*M2, M2, M2+1, tanB, m_sleptons, to_minimize="mu", verbose=True)
         if np.isnan(m):
             print("\t NaN \t NaN")
             continue
